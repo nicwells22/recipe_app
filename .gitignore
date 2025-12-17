@@ -1,0 +1,7 @@
+uploads/
+.env
+recipe_app.db
+node_modules
+__pycache__
+.venv
+venv

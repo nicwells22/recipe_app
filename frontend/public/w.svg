@@ -1,0 +1,17 @@
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <rect width="240" height="240" rx="48" fill="#FFFFFF"/>
+
+  <!-- W shape -->
+  <path d="M50 60 L80 180 L120 100 L160 180 L190 60"
+        stroke="#6B8E7F"
+        stroke-width="16"
+        fill="none"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>
+
+  <!-- Underline / foundation -->
+  <line x1="70" y1="195" x2="170" y2="195"
+        stroke="#C97A5A"
+        stroke-width="6"
+        stroke-linecap="round"/>
+</svg>
