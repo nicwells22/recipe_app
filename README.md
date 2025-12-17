@@ -65,7 +65,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Run the server
-uvicorn app.main:app --reload --port 8000
+python run.py
 ```
 
 The API will be available at `http://localhost:8000`. API docs at `http://localhost:8000/docs`.
