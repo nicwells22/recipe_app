@@ -7,6 +7,7 @@ import type { User, AuthTokens } from '@/types';
 
 interface LoginData {
   email: string;
+  password: string;
 }
 
 export function useAuth() {
@@ -19,7 +20,10 @@ export function useAuth() {
 
   const loginMutation = useMutation({
     mutationFn: async (data: LoginData) => {
-      const response = await api.post<AuthTokens>('/auth/login', { email: data.email });
+      const response = await api.post<AuthTokens>('/auth/login', { 
+        email: data.email,
+        password: data.password 
+      });
       return response.data;
     },
     onSuccess: async (data) => {

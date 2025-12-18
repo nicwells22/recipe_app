@@ -8,11 +8,38 @@ from slowapi.errors import RateLimitExceeded
 import os
 
 from .config import settings
-from .database import engine, Base
+from .database import engine, Base, SessionLocal
+from .models import User
+from .auth import get_password_hash
+from .user_database import create_user_database
 from .routers import auth, users, recipes, folders
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Create default admin user if no users exist
+def create_default_admin():
+    db = SessionLocal()
+    try:
+        if db.query(User).count() == 0:
+            admin = User(
+                email="admin@recipe.app",
+                username="admin",
+                hashed_password=get_password_hash("admin123"),
+                role="admin",
+                is_active=True,
+                is_verified=True
+            )
+            db.add(admin)
+            db.commit()
+            db.refresh(admin)
+            # Create admin's personal database
+            create_user_database(admin.username)
+            print("Default admin user created: admin@recipe.app / admin123")
+    finally:
+        db.close()
+
+create_default_admin()
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)

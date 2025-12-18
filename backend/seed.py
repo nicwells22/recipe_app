@@ -1,6 +1,11 @@
 """
 Seed script to populate the database with sample data.
 Run with: python seed.py
+
+This script creates:
+1. An admin user in the central database
+2. A demo user in the central database  
+3. Sample recipes, folders, and tags in each user's personal database
 """
 
 import sys
@@ -10,37 +15,29 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.database import engine, SessionLocal, Base
-from app.models import User, Recipe, Ingredient, Instruction, Folder, Tag
+from app.models import User
+from app.auth import get_password_hash
+from app.user_database import (
+    create_user_database, 
+    get_user_session_factory,
+    Recipe, Ingredient, Instruction, Folder, Tag
+)
 
 
 
-def seed_database():
-    """Seed the database with sample data."""
+def seed_user_data(username: str):
+    """Seed a user's personal database with sample data."""
     
-    # Create all tables
-    Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
+    # Get user's database session
+    SessionFactory = get_user_session_factory(username)
+    user_db = SessionFactory()
     
     try:
         # Check if data already exists
-        existing_user = db.query(User).filter(User.email == "user@app.local").first()
-        if existing_user:
-            print("Database already seeded. Skipping...")
+        existing_recipe = user_db.query(Recipe).first()
+        if existing_recipe:
+            print(f"  User {username}'s database already has data. Skipping...")
             return
-        
-        print("Seeding database...")
-        
-        # Create default user (same as app uses)
-        demo_user = User(
-            email="user@app.local",
-            username="user",
-            hashed_password=""
-        )
-        db.add(demo_user)
-        db.flush()
-        
-        print(f"Created user: {demo_user.email}")
         
         # Create folders
         folders_data = [
@@ -53,11 +50,11 @@ def seed_database():
         
         folders = {}
         for folder_data in folders_data:
-            folder = Folder(owner_id=demo_user.id, **folder_data)
-            db.add(folder)
-            db.flush()
+            folder = Folder(**folder_data)
+            user_db.add(folder)
+            user_db.flush()
             folders[folder_data["name"]] = folder
-            print(f"Created folder: {folder.name}")
+            print(f"  Created folder: {folder.name}")
         
         # Create tags
         tags_data = ["vegetarian", "vegan", "gluten-free", "dairy-free", "healthy", 
@@ -66,11 +63,11 @@ def seed_database():
         tags = {}
         for tag_name in tags_data:
             tag = Tag(name=tag_name)
-            db.add(tag)
-            db.flush()
+            user_db.add(tag)
+            user_db.flush()
             tags[tag_name] = tag
         
-        print(f"Created {len(tags)} tags")
+        print(f"  Created {len(tags)} tags")
         
         # Create recipes
         recipes_data = [
@@ -254,7 +251,6 @@ def seed_database():
         for recipe_data in recipes_data:
             # Create recipe
             recipe = Recipe(
-                owner_id=demo_user.id,
                 title=recipe_data["title"],
                 description=recipe_data["description"],
                 prep_time=recipe_data["prep_time"],
@@ -262,8 +258,8 @@ def seed_database():
                 servings=recipe_data["servings"],
                 difficulty=recipe_data["difficulty"],
             )
-            db.add(recipe)
-            db.flush()
+            user_db.add(recipe)
+            user_db.flush()
             
             # Add ingredients
             for i, ing_data in enumerate(recipe_data["ingredients"]):
@@ -274,7 +270,7 @@ def seed_database():
                     unit=ing_data.get("unit"),
                     notes=ing_data.get("notes"),
                 )
-                db.add(ingredient)
+                user_db.add(ingredient)
             
             # Add instructions
             for i, inst_data in enumerate(recipe_data["instructions"]):
@@ -284,7 +280,7 @@ def seed_database():
                     content=inst_data["content"],
                     timer_minutes=inst_data.get("timer_minutes"),
                 )
-                db.add(instruction)
+                user_db.add(instruction)
             
             # Add tags
             for tag_name in recipe_data.get("tags", []):
@@ -296,11 +292,85 @@ def seed_database():
             if folder_name and folder_name in folders:
                 recipe.folders.append(folders[folder_name])
             
-            print(f"Created recipe: {recipe.title}")
+            print(f"  Created recipe: {recipe.title}")
         
-        db.commit()
-        print("\n✅ Database seeded successfully!")
-        print("\nThe app is ready to use - no login required!")
+        user_db.commit()
+        print(f"  ✅ User {username}'s data seeded successfully!")
+        
+    except Exception as e:
+        user_db.rollback()
+        print(f"Error seeding user {username}'s database: {e}")
+        raise
+    finally:
+        user_db.close()
+
+
+def seed_database():
+    """Seed the central database with users and their personal databases with sample data."""
+    
+    # Create central database tables
+    Base.metadata.create_all(bind=engine)
+    
+    db = SessionLocal()
+    
+    try:
+        # Check if admin already exists
+        existing_admin = db.query(User).filter(User.email == "admin@recipe.app").first()
+        if existing_admin:
+            print("Admin user already exists. Skipping user creation...")
+        else:
+            print("Creating users in central database...")
+            
+            # Create admin user
+            admin_user = User(
+                email="admin@recipe.app",
+                username="admin",
+                hashed_password=get_password_hash("admin123"),
+                role="admin",
+                is_active=True,
+                is_verified=True
+            )
+            db.add(admin_user)
+            db.flush()
+            print(f"Created admin user: {admin_user.email} (password: admin123)")
+            
+            # Create admin's personal database
+            create_user_database(admin_user.username)
+            
+            # Create demo user
+            demo_user = User(
+                email="demo@recipe.app",
+                username="demo",
+                hashed_password=get_password_hash("demo1234"),
+                role="user",
+                is_active=True,
+                is_verified=True
+            )
+            db.add(demo_user)
+            db.flush()
+            print(f"Created demo user: {demo_user.email} (password: demo1234)")
+            
+            # Create demo user's personal database
+            create_user_database(demo_user.username)
+            
+            db.commit()
+        
+        # Seed data for each user
+        print("\nSeeding user databases with sample data...")
+        
+        # Get all users and seed their databases
+        users = db.query(User).all()
+        for user in users:
+            print(f"\nSeeding data for user: {user.username}")
+            seed_user_data(user.username)
+        
+        print("\n" + "="*50)
+        print("✅ Database seeding complete!")
+        print("="*50)
+        print("\nYou can now log in with:")
+        print("  Admin: admin@recipe.app / admin123")
+        print("  Demo:  demo@recipe.app / demo1234")
+        print("\nAdmin users can create additional users via the Admin panel.")
         
     except Exception as e:
         db.rollback()

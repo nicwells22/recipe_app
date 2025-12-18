@@ -2,6 +2,7 @@ export interface User {
   id: number;
   email: string;
   username: string;
+  role: 'admin' | 'user';
   is_active: boolean;
   is_verified: boolean;
   created_at: string;
@@ -38,7 +39,6 @@ export interface Recipe {
   difficulty: 'easy' | 'medium' | 'hard' | null;
   created_at: string;
   updated_at: string | null;
-  owner_id: number;
   ingredients: Ingredient[];
   instructions: Instruction[];
   tags: Tag[];
@@ -63,7 +63,6 @@ export interface Folder {
   name: string;
   description: string | null;
   parent_id: number | null;
-  owner_id: number;
   created_at: string;
   recipe_count: number;
   children?: Folder[];

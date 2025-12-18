@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, X, Sun, Moon, ChefHat, Search, Plus } from 'lucide-react';
+import { Menu, X, Sun, Moon, ChefHat, Search, Plus, LogOut, Shield } from 'lucide-react';
 import { useThemeStore } from '@/stores/themeStore';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import Button from '@/components/ui/Button';
 
@@ -10,6 +11,7 @@ export default function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
   const { theme, setTheme } = useThemeStore();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,18 +58,28 @@ export default function Header() {
           </form>
 
           <nav className="hidden md:flex items-center gap-4">
-            <Link to="/recipes" className="text-gray-600 dark:text-gray-300 hover:text-primary-500">
-              Recipes
-            </Link>
-            <Link to="/folders" className="text-gray-600 dark:text-gray-300 hover:text-primary-500">
-              Folders
-            </Link>
-            <Link to="/recipes/new">
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                New Recipe
-              </Button>
-            </Link>
+            {isAuthenticated && (
+              <>
+                <Link to="/recipes" className="text-gray-600 dark:text-gray-300 hover:text-primary-500">
+                  Recipes
+                </Link>
+                <Link to="/folders" className="text-gray-600 dark:text-gray-300 hover:text-primary-500">
+                  Folders
+                </Link>
+                {user?.role === 'admin' && (
+                  <Link to="/admin" className="text-gray-600 dark:text-gray-300 hover:text-primary-500 flex items-center gap-1">
+                    <Shield className="h-4 w-4" />
+                    Admin
+                  </Link>
+                )}
+                <Link to="/recipes/new">
+                  <Button size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    New Recipe
+                  </Button>
+                </Link>
+              </>
+            )}
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -75,6 +87,16 @@ export default function Header() {
             >
               {getThemeIcon()}
             </button>
+            {isAuthenticated && (
+              <button
+                onClick={logout}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                aria-label="Logout"
+                title="Logout"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            )}
           </nav>
 
           <button
@@ -109,33 +131,59 @@ export default function Header() {
           </form>
 
           <nav className="flex flex-col gap-2">
-            <Link
-              to="/recipes"
-              className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Recipes
-            </Link>
-            <Link
-              to="/folders"
-              className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Folders
-            </Link>
-            <Link
-              to="/recipes/new"
-              className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              New Recipe
-            </Link>
+            {isAuthenticated && (
+              <>
+                <Link
+                  to="/recipes"
+                  className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Recipes
+                </Link>
+                <Link
+                  to="/folders"
+                  className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Folders
+                </Link>
+                {user?.role === 'admin' && (
+                  <Link
+                    to="/admin"
+                    className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <Shield className="h-4 w-4" />
+                    Admin
+                  </Link>
+                )}
+                <Link
+                  to="/recipes/new"
+                  className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  New Recipe
+                </Link>
+              </>
+            )}
             <div className="flex items-center justify-between px-4 py-2">
               <span className="text-sm text-gray-600 dark:text-gray-400">Theme</span>
               <button onClick={toggleTheme} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                 {getThemeIcon()}
               </button>
             </div>
+            {isAuthenticated && (
+              <button
+                onClick={() => {
+                  logout();
+                  setIsMenuOpen(false);
+                }}
+                className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-red-500"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </button>
+            )}
           </nav>
         </div>
       </div>
