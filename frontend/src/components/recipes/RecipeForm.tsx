@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui';
-import type { RecipeCreateInput, IngredientInput, InstructionInput } from '@/types';
+import type { RecipeCreateInput } from '@/types';
 
 interface RecipeFormProps {
   defaultValues?: Partial<RecipeCreateInput>;

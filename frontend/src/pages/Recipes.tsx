@@ -4,7 +4,7 @@ import { Search, Filter, Plus, ChefHat, X } from 'lucide-react';
 import { useRecipes, useTags } from '@/hooks/useRecipes';
 import { useFolders } from '@/hooks/useFolders';
 import RecipeCard from '@/components/recipes/RecipeCard';
-import { Button, Input, Select, Spinner } from '@/components/ui';
+import { Button, Select, Spinner } from '@/components/ui';
 import type { RecipeFilters } from '@/types';
 
 export default function Recipes() {
