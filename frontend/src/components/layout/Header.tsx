@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, X, Sun, Moon, ChefHat, Search, Plus, LogOut, Shield } from 'lucide-react';
+import { Menu, X, Sun, Moon, ChefHat, Search, Plus, LogOut, Shield, User } from 'lucide-react';
 import { useThemeStore } from '@/stores/themeStore';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -87,15 +87,28 @@ export default function Header() {
             >
               {getThemeIcon()}
             </button>
-            {isAuthenticated && (
-              <button
-                onClick={logout}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
-                aria-label="Logout"
-                title="Logout"
-              >
-                <LogOut className="h-5 w-5" />
-              </button>
+            {isAuthenticated && user && (
+              <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-600">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
+                    <User className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                  </div>
+                  <div className="hidden lg:block">
+                    <p className="font-medium text-gray-700 dark:text-gray-200">{user.username}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {user.role === 'admin' ? 'Administrator' : 'User'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                  aria-label="Logout"
+                  title="Logout"
+                >
+                  <LogOut className="h-5 w-5" />
+                </button>
+              </div>
             )}
           </nav>
 
@@ -172,17 +185,30 @@ export default function Header() {
                 {getThemeIcon()}
               </button>
             </div>
-            {isAuthenticated && (
-              <button
-                onClick={() => {
-                  logout();
-                  setIsMenuOpen(false);
-                }}
-                className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-red-500"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </button>
+            {isAuthenticated && user && (
+              <>
+                <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
+                    <User className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-700 dark:text-gray-200">{user.username}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {user.email} • {user.role === 'admin' ? 'Administrator' : 'User'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    logout();
+                    setIsMenuOpen(false);
+                  }}
+                  className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-red-500"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </>
             )}
           </nav>
         </div>
