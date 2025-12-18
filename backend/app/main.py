@@ -17,15 +17,45 @@ from .routers import auth, users, recipes, folders
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
-# Create default admin user if no users exist
-def create_default_admin():
+# Create initial admin user if no users exist (uses environment variables in production)
+def create_initial_admin():
+    """
+    Creates an initial admin user on first startup.
+    
+    In production, set these environment variables:
+    - ADMIN_EMAIL: Admin email address
+    - ADMIN_USERNAME: Admin username  
+    - ADMIN_PASSWORD: Admin password (REQUIRED - app won't create admin without it)
+    
+    In development, falls back to defaults if ADMIN_PASSWORD is not set.
+    """
     db = SessionLocal()
     try:
         if db.query(User).count() == 0:
+            # Get credentials from environment/settings
+            admin_email = settings.ADMIN_EMAIL
+            admin_username = settings.ADMIN_USERNAME
+            admin_password = settings.ADMIN_PASSWORD
+            
+            # In production, require password to be set via environment
+            if not admin_password:
+                if settings.DEBUG:
+                    # Development fallback
+                    admin_password = "admin123"
+                    print("=" * 60)
+                    print("⚠️  WARNING: Using default admin password (DEBUG mode only)")
+                    print("=" * 60)
+                else:
+                    print("=" * 60)
+                    print("❌ ERROR: ADMIN_PASSWORD environment variable not set!")
+                    print("   Set ADMIN_PASSWORD to create the initial admin user.")
+                    print("=" * 60)
+                    return
+            
             admin = User(
-                email="admin@recipe.app",
-                username="admin",
-                hashed_password=get_password_hash("admin123"),
+                email=admin_email,
+                username=admin_username,
+                hashed_password=get_password_hash(admin_password),
                 role="admin",
                 is_active=True,
                 is_verified=True
@@ -33,13 +63,23 @@ def create_default_admin():
             db.add(admin)
             db.commit()
             db.refresh(admin)
-            # Create admin's personal database
+            
+            # Create admin's personal database and upload directory
             create_user_database(admin.username)
-            print("Default admin user created: admin@recipe.app / admin123")
+            
+            print("=" * 60)
+            print("✅ Initial admin user created successfully!")
+            print(f"   Email: {admin_email}")
+            print(f"   Username: {admin_username}")
+            print("   ⚠️  Please change the password after first login!")
+            print("=" * 60)
+    except Exception as e:
+        print(f"Error creating initial admin: {e}")
+        db.rollback()
     finally:
         db.close()
 
-create_default_admin()
+create_initial_admin()
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)

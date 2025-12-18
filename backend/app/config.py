@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: set = {"jpg", "jpeg", "png", "gif", "webp"}
     CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173"]
     
+    # Initial admin user (from environment variables)
+    ADMIN_EMAIL: str = "admin@recipe.app"
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str = ""  # Must be set via environment variable in production
+    
     class Config:
         env_file = ".env"
 
