@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '@/stores/authStore';
 
 const api = axios.create({
   baseURL: '/api',
@@ -6,6 +7,33 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Add auth token to requests (don't overwrite if already set)
+api.interceptors.request.use((config) => {
+  if (!config.headers.Authorization) {
+    const token = useAuthStore.getState().accessToken;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
+// Handle 401 responses by logging out (but not during login flow)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Only logout on 401 if we're already authenticated and it's not the login endpoint
+    const isLoginEndpoint = error.config?.url?.includes('/auth/login');
+    const isMeEndpoint = error.config?.url?.includes('/auth/me');
+    const isAuthenticated = useAuthStore.getState().isAuthenticated;
+    
+    if (error.response?.status === 401 && isAuthenticated && !isLoginEndpoint && !isMeEndpoint) {
+      useAuthStore.getState().logout();
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;
 

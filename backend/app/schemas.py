@@ -16,12 +16,20 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     id: int
+    role: str
     is_active: bool
     is_verified: bool
     created_at: datetime
     
     class Config:
         from_attributes = True
+
+
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    username: str = Field(..., min_length=3, max_length=100)
+    password: str = Field(..., min_length=8)
+    role: str = Field(default="user", pattern="^(admin|user)$")
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -130,7 +138,6 @@ class RecipeResponse(RecipeBase):
     image_url: Optional[str]
     created_at: datetime
     updated_at: Optional[datetime]
-    owner_id: int
     ingredients: List[IngredientResponse]
     instructions: List[InstructionResponse]
     tags: List[TagResponse]
@@ -170,14 +177,19 @@ class FolderUpdate(BaseModel):
 class FolderResponse(FolderBase):
     id: int
     parent_id: Optional[int]
-    owner_id: int
     created_at: datetime
     recipe_count: int = 0
     
     class Config:
         from_attributes = True
 
-class FolderTreeResponse(FolderResponse):
+class FolderTreeResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    parent_id: Optional[int]
+    created_at: datetime
+    recipe_count: int = 0
     children: List["FolderTreeResponse"] = []
     
     class Config:

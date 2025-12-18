@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Generator
 import hashlib
 import secrets
 from jose import JWTError, jwt
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .database import get_db
 from .models import User
+from .user_database import get_user_session_factory, get_user_upload_dir
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -102,3 +103,30 @@ async def get_current_user_optional(
         return await get_current_user(token, db)
     except HTTPException:
         return None
+
+
+async def get_current_admin(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """Require the current user to be an admin."""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
+
+
+def get_current_user_db(current_user: User = Depends(get_current_user)) -> Generator[Session, None, None]:
+    """Get a database session for the current user's personal database."""
+    SessionLocal = get_user_session_factory(current_user.username)
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_current_user_upload_dir(current_user: User = Depends(get_current_user)) -> str:
+    """Get the upload directory for the current user."""
+    return get_user_upload_dir(current_user.username)

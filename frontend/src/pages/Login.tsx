@@ -5,6 +5,7 @@ import { Button, Input } from '@/components/ui';
 
 interface LoginForm {
   email: string;
+  password: string;
 }
 
 export default function Login() {
@@ -25,7 +26,7 @@ export default function Login() {
         <div className="text-center mb-8">
           <ChefHat className="h-12 w-12 mx-auto text-primary-500 mb-4" />
           <h1 className="text-2xl font-bold">Welcome</h1>
-          <p className="text-gray-600 dark:text-gray-400">Enter your email to continue</p>
+          <p className="text-gray-600 dark:text-gray-400">Sign in to your account</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="card p-6 space-y-4">
@@ -45,13 +46,29 @@ export default function Login() {
             error={errors.email?.message}
           />
 
+          <Input
+            id="password"
+            type="password"
+            label="Password"
+            placeholder="••••••••"
+            autoComplete="current-password"
+            {...register('password', {
+              required: 'Password is required',
+              minLength: {
+                value: 8,
+                message: 'Password must be at least 8 characters',
+              },
+            })}
+            error={errors.password?.message}
+          />
+
           <Button type="submit" className="w-full" isLoading={isLoggingIn}>
-            Continue
+            Sign In
           </Button>
         </form>
 
         <p className="text-center mt-6 text-sm text-gray-500 dark:text-gray-400">
-          New users will be automatically registered
+          Contact your administrator for account access
         </p>
       </div>
     </div>

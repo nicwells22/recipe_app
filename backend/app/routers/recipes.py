@@ -6,23 +6,14 @@ import os
 import uuid
 from PIL import Image
 
-from ..database import get_db
-from ..models import Recipe, Ingredient, Instruction, Folder, Tag, Favorite, User
+from ..models import User
+from ..user_database import Recipe, Ingredient, Instruction, Folder, Tag, Favorite
 from ..schemas import (
     RecipeCreate, RecipeUpdate, RecipeResponse, RecipeListResponse,
     PaginatedResponse, MessageResponse
 )
 from ..config import settings
-
-# Get or create a default user for the app (no auth needed)
-def get_default_user(db: Session = Depends(get_db)) -> User:
-    user = db.query(User).first()
-    if not user:
-        user = User(email="user@app.local", username="user", hashed_password="")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
+from ..auth import get_current_user, get_current_user_db, get_current_user_upload_dir
 
 router = APIRouter(prefix="/api/recipes", tags=["Recipes"])
 
@@ -34,10 +25,9 @@ def get_or_create_tag(db: Session, tag_name: str) -> Tag:
         db.flush()
     return tag
 
-def check_favorite(db: Session, recipe_id: int, user_id: int) -> bool:
+def check_favorite(db: Session, recipe_id: int) -> bool:
     return db.query(Favorite).filter(
-        Favorite.recipe_id == recipe_id,
-        Favorite.user_id == user_id
+        Favorite.recipe_id == recipe_id
     ).first() is not None
 
 @router.get("", response_model=PaginatedResponse)
@@ -49,10 +39,10 @@ async def get_recipes(
     tag: Optional[str] = None,
     difficulty: Optional[str] = None,
     favorites_only: bool = False,
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db)
 ):
-    query = db.query(Recipe).filter(Recipe.owner_id == current_user.id)
+    query = db.query(Recipe)
     
     # Search filter
     if search:
@@ -79,7 +69,7 @@ async def get_recipes(
     
     # Favorites filter
     if favorites_only:
-        query = query.join(Recipe.favorites).filter(Favorite.user_id == current_user.id)
+        query = query.join(Recipe.favorites)
     
     # Get total count
     total = query.count()
@@ -100,7 +90,7 @@ async def get_recipes(
             "cook_time": recipe.cook_time,
             "difficulty": recipe.difficulty,
             "created_at": recipe.created_at,
-            "is_favorite": check_favorite(db, recipe.id, current_user.id)
+            "is_favorite": check_favorite(db, recipe.id)
         }
         items.append(recipe_dict)
     
@@ -115,12 +105,10 @@ async def get_recipes(
 @router.get("/recent", response_model=List[RecipeListResponse])
 async def get_recent_recipes(
     limit: int = Query(6, ge=1, le=20),
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db)
 ):
-    recipes = db.query(Recipe).filter(
-        Recipe.owner_id == current_user.id
-    ).order_by(Recipe.created_at.desc()).limit(limit).all()
+    recipes = db.query(Recipe).order_by(Recipe.created_at.desc()).limit(limit).all()
     
     items = []
     for recipe in recipes:
@@ -133,7 +121,7 @@ async def get_recent_recipes(
             cook_time=recipe.cook_time,
             difficulty=recipe.difficulty,
             created_at=recipe.created_at,
-            is_favorite=check_favorite(db, recipe.id, current_user.id)
+            is_favorite=check_favorite(db, recipe.id)
         ))
     
     return items
@@ -141,15 +129,15 @@ async def get_recent_recipes(
 @router.get("/{recipe_id}", response_model=RecipeResponse)
 async def get_recipe(
     recipe_id: int,
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db)
 ):
     recipe = db.query(Recipe).options(
         joinedload(Recipe.ingredients),
         joinedload(Recipe.instructions),
         joinedload(Recipe.tags),
         joinedload(Recipe.folders)
-    ).filter(Recipe.id == recipe_id, Recipe.owner_id == current_user.id).first()
+    ).filter(Recipe.id == recipe_id).first()
     
     if not recipe:
         raise HTTPException(
@@ -168,12 +156,11 @@ async def get_recipe(
         difficulty=recipe.difficulty,
         created_at=recipe.created_at,
         updated_at=recipe.updated_at,
-        owner_id=recipe.owner_id,
         ingredients=[ing for ing in recipe.ingredients],
         instructions=sorted(recipe.instructions, key=lambda x: x.step_number),
         tags=[tag for tag in recipe.tags],
         folders=[folder for folder in recipe.folders],
-        is_favorite=check_favorite(db, recipe.id, current_user.id)
+        is_favorite=check_favorite(db, recipe.id)
     )
     
     return response
@@ -181,8 +168,8 @@ async def get_recipe(
 @router.post("", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
 async def create_recipe(
     recipe_data: RecipeCreate,
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db)
 ):
     # Create recipe
     recipe = Recipe(
@@ -191,8 +178,7 @@ async def create_recipe(
         prep_time=recipe_data.prep_time,
         cook_time=recipe_data.cook_time,
         servings=recipe_data.servings,
-        difficulty=recipe_data.difficulty,
-        owner_id=current_user.id
+        difficulty=recipe_data.difficulty
     )
     db.add(recipe)
     db.flush()
@@ -225,10 +211,7 @@ async def create_recipe(
     
     # Add to folders
     for folder_id in recipe_data.folder_ids:
-        folder = db.query(Folder).filter(
-            Folder.id == folder_id,
-            Folder.owner_id == current_user.id
-        ).first()
+        folder = db.query(Folder).filter(Folder.id == folder_id).first()
         if folder:
             recipe.folders.append(folder)
     
@@ -241,13 +224,10 @@ async def create_recipe(
 async def update_recipe(
     recipe_id: int,
     recipe_data: RecipeUpdate,
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db)
 ):
-    recipe = db.query(Recipe).filter(
-        Recipe.id == recipe_id,
-        Recipe.owner_id == current_user.id
-    ).first()
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     
     if not recipe:
         raise HTTPException(
@@ -305,10 +285,7 @@ async def update_recipe(
     if recipe_data.folder_ids is not None:
         recipe.folders.clear()
         for folder_id in recipe_data.folder_ids:
-            folder = db.query(Folder).filter(
-                Folder.id == folder_id,
-                Folder.owner_id == current_user.id
-            ).first()
+            folder = db.query(Folder).filter(Folder.id == folder_id).first()
             if folder:
                 recipe.folders.append(folder)
     
@@ -319,13 +296,11 @@ async def update_recipe(
 @router.delete("/{recipe_id}", response_model=MessageResponse)
 async def delete_recipe(
     recipe_id: int,
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db),
+    upload_dir: str = Depends(get_current_user_upload_dir)
 ):
-    recipe = db.query(Recipe).filter(
-        Recipe.id == recipe_id,
-        Recipe.owner_id == current_user.id
-    ).first()
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     
     if not recipe:
         raise HTTPException(
@@ -335,7 +310,7 @@ async def delete_recipe(
     
     # Delete image if exists
     if recipe.image_url:
-        image_path = os.path.join(settings.UPLOAD_DIR, os.path.basename(recipe.image_url))
+        image_path = os.path.join(upload_dir, os.path.basename(recipe.image_url))
         if os.path.exists(image_path):
             os.remove(image_path)
     
@@ -348,13 +323,11 @@ async def delete_recipe(
 async def upload_recipe_image(
     recipe_id: int,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db),
+    upload_dir: str = Depends(get_current_user_upload_dir)
 ):
-    recipe = db.query(Recipe).filter(
-        Recipe.id == recipe_id,
-        Recipe.owner_id == current_user.id
-    ).first()
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     
     if not recipe:
         raise HTTPException(
@@ -380,13 +353,13 @@ async def upload_recipe_image(
     
     # Delete old image if exists
     if recipe.image_url:
-        old_path = os.path.join(settings.UPLOAD_DIR, os.path.basename(recipe.image_url))
+        old_path = os.path.join(upload_dir, os.path.basename(recipe.image_url))
         if os.path.exists(old_path):
             os.remove(old_path)
     
     # Save new image
     filename = f"{uuid.uuid4()}.{ext}"
-    filepath = os.path.join(settings.UPLOAD_DIR, filename)
+    filepath = os.path.join(upload_dir, filename)
     
     with open(filepath, "wb") as f:
         f.write(contents)
@@ -400,7 +373,7 @@ async def upload_recipe_image(
     except Exception:
         pass  # Keep original if resize fails
     
-    recipe.image_url = f"/uploads/{filename}"
+    recipe.image_url = f"/uploads/{current_user.username}/{filename}"
     db.commit()
     
     return await get_recipe(recipe_id, current_user, db)
@@ -408,13 +381,10 @@ async def upload_recipe_image(
 @router.post("/{recipe_id}/favorite", response_model=MessageResponse)
 async def toggle_favorite(
     recipe_id: int,
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db)
 ):
-    recipe = db.query(Recipe).filter(
-        Recipe.id == recipe_id,
-        Recipe.owner_id == current_user.id
-    ).first()
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     
     if not recipe:
         raise HTTPException(
@@ -422,17 +392,14 @@ async def toggle_favorite(
             detail="Recipe not found"
         )
     
-    existing = db.query(Favorite).filter(
-        Favorite.recipe_id == recipe_id,
-        Favorite.user_id == current_user.id
-    ).first()
+    existing = db.query(Favorite).filter(Favorite.recipe_id == recipe_id).first()
     
     if existing:
         db.delete(existing)
         db.commit()
         return MessageResponse(message="Recipe removed from favorites")
     else:
-        favorite = Favorite(recipe_id=recipe_id, user_id=current_user.id)
+        favorite = Favorite(recipe_id=recipe_id)
         db.add(favorite)
         db.commit()
         return MessageResponse(message="Recipe added to favorites")
@@ -441,13 +408,10 @@ async def toggle_favorite(
 async def add_recipe_to_folder(
     recipe_id: int,
     folder_id: int,
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db)
 ):
-    recipe = db.query(Recipe).filter(
-        Recipe.id == recipe_id,
-        Recipe.owner_id == current_user.id
-    ).first()
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     
     if not recipe:
         raise HTTPException(
@@ -455,10 +419,7 @@ async def add_recipe_to_folder(
             detail="Recipe not found"
         )
     
-    folder = db.query(Folder).filter(
-        Folder.id == folder_id,
-        Folder.owner_id == current_user.id
-    ).first()
+    folder = db.query(Folder).filter(Folder.id == folder_id).first()
     
     if not folder:
         raise HTTPException(
@@ -477,13 +438,10 @@ async def add_recipe_to_folder(
 async def remove_recipe_from_folder(
     recipe_id: int,
     folder_id: int,
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db)
 ):
-    recipe = db.query(Recipe).filter(
-        Recipe.id == recipe_id,
-        Recipe.owner_id == current_user.id
-    ).first()
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     
     if not recipe:
         raise HTTPException(
@@ -491,10 +449,7 @@ async def remove_recipe_from_folder(
             detail="Recipe not found"
         )
     
-    folder = db.query(Folder).filter(
-        Folder.id == folder_id,
-        Folder.owner_id == current_user.id
-    ).first()
+    folder = db.query(Folder).filter(Folder.id == folder_id).first()
     
     if not folder:
         raise HTTPException(
@@ -511,11 +466,9 @@ async def remove_recipe_from_folder(
 
 @router.get("/tags/all", response_model=List[str])
 async def get_all_tags(
-    current_user: User = Depends(get_default_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_current_user_db)
 ):
-    tags = db.query(Tag).join(Tag.recipes).filter(
-        Recipe.owner_id == current_user.id
-    ).distinct().all()
+    tags = db.query(Tag).join(Tag.recipes).distinct().all()
     
     return [tag.name for tag in tags]
